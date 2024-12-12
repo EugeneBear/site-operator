@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сайт Оператора</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      font-family: 'Open Sans', sans-serif; /* Шрифт для всего сайта */
+      background-color: #f9f9f9;
+      text-align: center;
+    }
+  
+    button {
+      padding: 20px 50px; /* Увеличенные отступы */
+      font-size: 22px;    /* Увеличенный шрифт */
+      font-weight: bold;
+      color: #fff; /* Цвет текста */
+      background: linear-gradient(135deg, #6a11cb, #2575fc); /* Градиент кнопки */
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Тени */
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+  
+    button:hover {
+      background: linear-gradient(135deg, #2575fc, #6a11cb); /* Инверсия градиента */
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3); /* Усиление тени */
+    }
+  
+    button:disabled {
+      background: linear-gradient(135deg, #b0b0b0, #d3d3d3); /* Бледный градиент для неактивной кнопки */
+      color: #f0f0f0; /* Бледный цвет текста */
+      box-shadow: none; /* Убираем тень */
+      cursor: not-allowed; /* Меняем курсор на неактивный */
+    }
+  
+    #current-client {
+      font-size: 24px;
+      color: #333;
+      margin: 20px 0;
+    }
+  
+    img.logo {
+      width: 100px;
+      margin-top: 20px;
+    }
+  </style>
+  
+  
+</head>
+<body>
+  <h1>Сайт Оператора</h1>
+
+  <div id="controls">
+    <button id="call-next">Вызвать следующего клиента</button>
+    <div id="current-client">Текущий клиент: <span id="client-number">—</span></div>
+    <button id="finish-service">Завершить обслуживание</button>
+  </div>
+
+  <script>
+    const socket = io();
+
+    const callNextButton = document.getElementById('call-next');
+    const finishServiceButton = document.getElementById('finish-service');
+    const clientNumberSpan = document.getElementById('client-number');
+
+    let currentClient = null;
+
+    // Когда кнопка "Вызвать следующего клиента" нажата
+    callNextButton.addEventListener('click', () => {
+      fetch('/call-client', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        currentClient = data.clientNumber;
+        clientNumberSpan.textContent = currentClient;
+        finishServiceButton.disabled = false;
+        callNextButton.disabled = true;
+      })
+      .catch(error => console.error('Error calling next client:', error));
+    });
+
+    // Когда кнопка "Завершить обслуживание" нажата
+    finishServiceButton.addEventListener('click', () => {
+      if (currentClient) {
+        fetch('/end-service', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then(() => {
+          currentClient = null;
+          clientNumberSpan.textContent = '—';
+          finishServiceButton.disabled = true;
+          callNextButton.disabled = false;
+        })
+        .catch(error => console.error('Error ending service:', error));
+      }
+    });
+  </script>
+</body>
+</html>
