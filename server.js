@@ -3,25 +3,24 @@ const express = require('express');
 const { google } = require('googleapis');
 const bodyParser = require('body-parser');
 const path = require('path');
-const http = require('http'); // Для создания HTTP-сервера
-const { Server } = require('socket.io'); // Для подключения Socket.IO
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
-const server = http.createServer(app); // Создаем сервер на основе Express
-const io = new Server(server); // Подключаем Socket.IO к серверу
+const server = http.createServer(app);
+const io = new Server(server);
 
 app.use(bodyParser.json());
 
 // ID таблицы Google Sheets
-const SPREADSHEET_ID = '1w5X3iEKSq-3_WW6JLbmf9ExShxrp5sLbypsjOJ-mTbE'; // Укажите ID вашей таблицы
+const SPREADSHEET_ID = '1w5X3iEKSq-3_WW6JLbmf9ExShxrp5sLbypsjOJ-mTbE';
 
-// Подключение к Google Sheets API с использованием данных из переменной окружения
-const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON; // Загружаем переменную окружения
+// Подключение к Google Sheets API
+const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 if (!credentialsJson) {
   throw new Error('Переменная окружения GOOGLE_APPLICATION_CREDENTIALS_JSON не установлена');
 }
 
-// Создание объекта аутентификации из строки JSON
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(credentialsJson),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -29,39 +28,55 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Настройка отдачи статических файлов из текущей директории
 app.use(express.static(__dirname));
 
-// Обработчик для главной страницы
+// Главная страница
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Чтобы отслеживать текущий номер клиента
-let currentClient = 1; // Начинаем с клиента номер 1
+// Получение текущего номера клиента из ячейки F1
+async function getCurrentClient() {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'F1', // Изменено на F1
+  });
+  return parseInt(response.data.values?.[0]?.[0] || '1', 10);
+}
 
-// Обработчик для вызова следующего клиента
+// Сохранение текущего номера клиента в ячейку F1
+async function saveCurrentClient(clientNumber) {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'F1', // Изменено на F1
+    valueInputOption: 'RAW',
+    resource: {
+      values: [[clientNumber]],
+    },
+  });
+}
+
+// Обработчик для вызова клиента
 app.post('/call-client', async (req, res) => {
   try {
-    const rowNumber = currentClient;
-
-    // Записываем время вызова в столбец G
+    const currentClient = await getCurrentClient();
     const currentTime = new Date().toISOString();
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `G${rowNumber}`,
+      range: `G${currentClient}`,
       valueInputOption: 'RAW',
       resource: {
         values: [[currentTime]],
       },
     });
 
-    currentClient++;
+    const nextClient = currentClient + 1;
+    await saveCurrentClient(nextClient);
 
-    // Уведомляем всех подключенных клиентов о новом вызове
-    io.emit('clientCalled', { clientNumber: rowNumber });
+    io.emit('clientCalled', { clientNumber: currentClient });
 
-    res.status(200).send({ message: 'Client called successfully', clientNumber: rowNumber });
+    res.status(200).send({ message: 'Client called successfully', clientNumber: currentClient });
   } catch (error) {
     console.error('Error calling client:', error);
     res.status(500).send('Failed to call client.');
@@ -71,20 +86,19 @@ app.post('/call-client', async (req, res) => {
 // Обработчик для завершения обслуживания
 app.post('/end-service', async (req, res) => {
   try {
-    const rowNumber = currentClient - 1;
+    const currentClient = (await getCurrentClient()) - 1;
     const endTime = new Date().toISOString();
 
-    // Записываем время завершения в столбец H
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `H${rowNumber}`,
+      range: `H${currentClient}`,
       valueInputOption: 'RAW',
       resource: {
         values: [[endTime]],
       },
     });
 
-    io.emit('serviceEnded', { clientNumber: rowNumber });
+    io.emit('serviceEnded', { clientNumber: currentClient });
 
     res.status(200).send('Service ended successfully.');
   } catch (error) {
@@ -93,16 +107,19 @@ app.post('/end-service', async (req, res) => {
   }
 });
 
-// Подключение новых клиентов через WebSocket
-io.on('connection', (socket) => {
+// WebSocket
+io.on('connection', async (socket) => {
   console.log('Новое соединение установлено');
+
+  const currentClient = await getCurrentClient();
+  socket.emit('updateClientNumber', { clientNumber: currentClient });
 
   socket.on('disconnect', () => {
     console.log('Пользователь отключился');
   });
 });
 
-// Прослушивание порта
+// Запуск сервера
 server.listen(3000, () => {
   console.log('Сервер запущен на http://localhost:3000');
 });
