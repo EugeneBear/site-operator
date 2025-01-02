@@ -12,15 +12,18 @@ const io = new Server(server); // Подключаем Socket.IO к сервер
 
 app.use(bodyParser.json());
 
-// Путь к вашему JSON с ключами сервисного аккаунта
-const SERVICE_ACCOUNT_FILE = './client_secret.json'; // Замените на ваш файл
-
 // ID таблицы Google Sheets
 const SPREADSHEET_ID = '1w5X3iEKSq-3_WW6JLbmf9ExShxrp5sLbypsjOJ-mTbE'; // Укажите ID вашей таблицы
 
-// Подключение к Google Sheets API
+// Подключение к Google Sheets API с использованием данных из переменной окружения
+const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON; // Загружаем переменную окружения
+if (!credentialsJson) {
+  throw new Error('Переменная окружения GOOGLE_APPLICATION_CREDENTIALS_JSON не установлена');
+}
+
+// Создание объекта аутентификации из строки JSON
 const auth = new google.auth.GoogleAuth({
-  keyFile: SERVICE_ACCOUNT_FILE,
+  credentials: JSON.parse(credentialsJson),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
