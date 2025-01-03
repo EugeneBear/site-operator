@@ -111,6 +111,7 @@ app.post('/end-service', async (req, res) => {
 io.on('connection', async (socket) => {
   console.log('Новое соединение установлено');
 
+  // Отправляем текущий номер клиенту сразу после подключения
   const currentClient = await getCurrentClient();
   socket.emit('updateClientNumber', { clientNumber: currentClient });
 
