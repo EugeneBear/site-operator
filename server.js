@@ -34,21 +34,20 @@ app.use(express.static(__dirname));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
-
-// Получение текущего номера клиента из ячейки F1
+// Получение текущего номера клиента из ячейки F2
 async function getCurrentClient() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: 'F1', // Изменено на F1
+    range: 'F2', // Изменено на F2
   });
   return parseInt(response.data.values?.[0]?.[0] || '1', 10);
 }
 
-// Сохранение текущего номера клиента в ячейку F1
+// Сохранение текущего номера клиента в ячейку F2
 async function saveCurrentClient(clientNumber) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: 'F1', // Изменено на F1
+    range: 'F2', // Изменено на F2
     valueInputOption: 'RAW',
     resource: {
       values: [[clientNumber]],
@@ -64,7 +63,7 @@ app.post('/call-client', async (req, res) => {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `G${currentClient}`,
+      range: `G${currentClient + 1}`, // Запись во вторую строку и ниже
       valueInputOption: 'RAW',
       resource: {
         values: [[currentTime]],
@@ -91,7 +90,7 @@ app.post('/end-service', async (req, res) => {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `H${currentClient}`,
+      range: `H${currentClient + 1}`, // Запись во вторую строку и ниже
       valueInputOption: 'RAW',
       resource: {
         values: [[endTime]],
