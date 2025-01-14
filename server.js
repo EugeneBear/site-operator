@@ -58,7 +58,7 @@ async function findNextAvailableClient() {
 async function callClientWithTime(rowIndex) {
   const currentTime = new Date().toISOString();
   
-  // Записываем в G (начало обслуживания) и F (завершение обслуживания)
+  // Записываем в G (начало обслуживания) и H (завершение обслуживания)
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
     resource: {
