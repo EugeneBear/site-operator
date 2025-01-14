@@ -34,23 +34,45 @@ app.use(express.static(__dirname));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
-// Получение текущего номера клиента из ячейки F2
-async function getCurrentClient() {
+
+// Функция для поиска следующего свободного клиента
+async function findNextAvailableClient() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: 'F2', // Изменено на F2
+    range: 'A2:G300', // Диапазон номеров и времени
   });
-  return parseInt(response.data.values?.[0]?.[0] || '1', 10);
+  const rows = response.data.values || [];
+  
+  for (let i = 1; i < rows.length; i++) { // Начинаем с A2 (первая строка в данных - A1)
+    const clientNumber = rows[i][0]; // Номер в столбце A
+    const callTime = rows[i][6]; // Время в столбце G
+    
+    if (!callTime) {
+      return { clientNumber, rowIndex: i + 2 }; // Номер клиента и индекс строки
+    }
+  }
+  throw new Error('No available clients found.');
 }
 
-// Сохранение текущего номера клиента в ячейку F2
-async function saveCurrentClient(clientNumber) {
-  await sheets.spreadsheets.values.update({
+// Функция для записи времени начала и завершения обслуживания
+async function callClientWithTime(rowIndex) {
+  const currentTime = new Date().toISOString();
+  
+  // Записываем в G (начало обслуживания) и F (завершение обслуживания)
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
-    range: 'F2', // Изменено на F2
-    valueInputOption: 'RAW',
     resource: {
-      values: [[clientNumber]],
+      data: [
+        {
+          range: `G${rowIndex}`,
+          values: [[currentTime]],
+        },
+        {
+          range: `F${rowIndex}`,
+          values: [[currentTime]],
+        },
+      ],
+      valueInputOption: 'RAW',
     },
   });
 }
@@ -58,51 +80,13 @@ async function saveCurrentClient(clientNumber) {
 // Обработчик для вызова клиента
 app.post('/call-client', async (req, res) => {
   try {
-    const currentClient = await getCurrentClient();
-    const currentTime = new Date().toISOString();
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `G${currentClient + 1}`, // Запись во вторую строку и ниже
-      valueInputOption: 'RAW',
-      resource: {
-        values: [[currentTime]],
-      },
-    });
-
-    const nextClient = currentClient + 1;
-    await saveCurrentClient(nextClient);
-
-    io.emit('clientCalled', { clientNumber: currentClient });
-
-    res.status(200).send({ message: 'Client called successfully', clientNumber: currentClient });
+    const { clientNumber, rowIndex } = await findNextAvailableClient();
+    await callClientWithTime(rowIndex); // Записываем времена
+    io.emit('clientCalled', { clientNumber });
+    res.status(200).send({ message: 'Client called successfully', clientNumber });
   } catch (error) {
     console.error('Error calling client:', error);
     res.status(500).send('Failed to call client.');
-  }
-});
-
-// Обработчик для завершения обслуживания
-app.post('/end-service', async (req, res) => {
-  try {
-    const currentClient = (await getCurrentClient()) - 1;
-    const endTime = new Date().toISOString();
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `H${currentClient + 1}`, // Запись во вторую строку и ниже
-      valueInputOption: 'RAW',
-      resource: {
-        values: [[endTime]],
-      },
-    });
-
-    io.emit('serviceEnded', { clientNumber: currentClient });
-
-    res.status(200).send('Service ended successfully.');
-  } catch (error) {
-    console.error('Error ending service:', error);
-    res.status(500).send('Failed to end service.');
   }
 });
 
@@ -111,8 +95,12 @@ io.on('connection', async (socket) => {
   console.log('Новое соединение установлено');
 
   // Отправляем текущий номер клиенту сразу после подключения
-  const currentClient = await getCurrentClient();
-  socket.emit('updateClientNumber', { clientNumber: currentClient });
+  try {
+    const { clientNumber } = await findNextAvailableClient();
+    socket.emit('updateClientNumber', { clientNumber });
+  } catch (error) {
+    console.error('Error sending client number:', error);
+  }
 
   socket.on('disconnect', () => {
     console.log('Пользователь отключился');
