@@ -68,7 +68,7 @@ async function callClientWithTime(rowIndex) {
           values: [[currentTime]],
         },
         {
-          range: `F${rowIndex}`,
+          range: `H${rowIndex}`,
           values: [[currentTime]],
         },
       ],
