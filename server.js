@@ -54,25 +54,32 @@ async function findNextAvailableClient() {
   throw new Error('No available clients found.');
 }
 
-// Функция для записи времени начала и завершения обслуживания
-async function callClientWithTime(rowIndex) {
+// Функция для записи времени начала обслуживания
+async function callClient(rowIndex) {
   const currentTime = new Date().toISOString();
   
-  // Записываем в G (начало обслуживания) и H (завершение обслуживания)
-  await sheets.spreadsheets.values.batchUpdate({
+  // Записываем время начала обслуживания в G
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
+    range: `G${rowIndex}`,
+    valueInputOption: 'RAW',
     resource: {
-      data: [
-        {
-          range: `G${rowIndex}`,
-          values: [[currentTime]],
-        },
-        {
-          range: `H${rowIndex}`,
-          values: [[currentTime]],
-        },
-      ],
-      valueInputOption: 'RAW',
+      values: [[currentTime]],
+    },
+  });
+}
+
+// Функция для записи времени завершения обслуживания
+async function endService(rowIndex) {
+  const currentTime = new Date().toISOString();
+  
+  // Записываем время завершения обслуживания в H
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `H${rowIndex}`,
+    valueInputOption: 'RAW',
+    resource: {
+      values: [[currentTime]],
     },
   });
 }
@@ -81,12 +88,26 @@ async function callClientWithTime(rowIndex) {
 app.post('/call-client', async (req, res) => {
   try {
     const { clientNumber, rowIndex } = await findNextAvailableClient();
-    await callClientWithTime(rowIndex); // Записываем времена
+    await callClient(rowIndex); // Записываем время начала обслуживания
     io.emit('clientCalled', { clientNumber });
     res.status(200).send({ message: 'Client called successfully', clientNumber });
   } catch (error) {
     console.error('Error calling client:', error);
     res.status(500).send('Failed to call client.');
+  }
+});
+
+// Обработчик для завершения обслуживания
+app.post('/end-service', async (req, res) => {
+  try {
+    const currentClient = req.body.currentClient;
+    const rowIndex = currentClient + 1; // Определяем строку на основе текущего номера клиента
+    await endService(rowIndex); // Записываем время завершения обслуживания
+    io.emit('serviceEnded', { clientNumber: currentClient });
+    res.status(200).send('Service ended successfully.');
+  } catch (error) {
+    console.error('Error ending service:', error);
+    res.status(500).send('Failed to end service.');
   }
 });
 
