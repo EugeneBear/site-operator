@@ -43,7 +43,7 @@ async function findNextAvailableClient() {
   });
   const rows = response.data.values || [];
   
-  for (let i = 1; i < rows.length; i++) { // Начинаем с A2
+  for (let i = 0; i < rows.length; i++) { // Начинаем с первой строки диапазона (A2)
     const clientNumber = rows[i][0]; // Номер в столбце A
     const callTime = rows[i][6]; // Время в столбце G
     
