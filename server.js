@@ -43,7 +43,7 @@ async function findNextAvailableClient() {
   });
   const rows = response.data.values || [];
   
-  for (let i = 1; i < rows.length; i++) { // Начинаем с A2 (первая строка в данных - A1)
+  for (let i = 1; i < rows.length; i++) { // Начинаем с A2
     const clientNumber = rows[i][0]; // Номер в столбце A
     const callTime = rows[i][6]; // Время в столбце G
     
@@ -101,7 +101,15 @@ app.post('/call-client', async (req, res) => {
 app.post('/end-service', async (req, res) => {
   try {
     const currentClient = req.body.currentClient;
-    const rowIndex = currentClient + 1; // Определяем строку на основе текущего номера клиента
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'A2:A300', // Диапазон столбца A (номера клиентов)
+    });
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(row => row[0] == currentClient) + 2; // Ищем строку и определяем индекс
+    
+    if (rowIndex < 2) throw new Error(`Client number ${currentClient} not found.`);
+    
     await endService(rowIndex); // Записываем время завершения обслуживания
     io.emit('serviceEnded', { clientNumber: currentClient });
     res.status(200).send('Service ended successfully.');
