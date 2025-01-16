@@ -43,7 +43,7 @@ async function findNextAvailableClient() {
   });
   const rows = response.data.values || [];
   
-  for (let i = 0; i < rows.length; i++) { // Начинаем с первой строки диапазона (A2)
+  for (let i = 0; i < rows.length; i++) { // Начинаем с A2 (первая строка в данных - A2)
     const clientNumber = rows[i][0]; // Номер в столбце A
     const callTime = rows[i][6]; // Время в столбце G
     
@@ -89,7 +89,7 @@ app.post('/call-client', async (req, res) => {
   try {
     const { clientNumber, rowIndex } = await findNextAvailableClient();
     await callClient(rowIndex); // Записываем время начала обслуживания
-    io.emit('clientCalled', { clientNumber });
+    io.emit('clientCalled', { clientNumber, rowIndex });
     res.status(200).send({ message: 'Client called successfully', clientNumber });
   } catch (error) {
     console.error('Error calling client:', error);
@@ -100,18 +100,12 @@ app.post('/call-client', async (req, res) => {
 // Обработчик для завершения обслуживания
 app.post('/end-service', async (req, res) => {
   try {
-    const currentClient = req.body.currentClient;
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'A2:A300', // Диапазон столбца A (номера клиентов)
-    });
-    const rows = response.data.values || [];
-    const rowIndex = rows.findIndex(row => row[0] == currentClient) + 2; // Ищем строку и определяем индекс
-    
-    if (rowIndex < 2) throw new Error(`Client number ${currentClient} not found.`);
-    
+    const { rowIndex } = req.body; // Получаем индекс строки из запроса
+    if (!rowIndex) {
+      throw new Error('Row index is required to end service.');
+    }
     await endService(rowIndex); // Записываем время завершения обслуживания
-    io.emit('serviceEnded', { clientNumber: currentClient });
+    io.emit('serviceEnded', { rowIndex });
     res.status(200).send('Service ended successfully.');
   } catch (error) {
     console.error('Error ending service:', error);
