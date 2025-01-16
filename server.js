@@ -43,7 +43,7 @@ async function findNextAvailableClient() {
   });
   const rows = response.data.values || [];
   
-  for (let i = 0; i < rows.length; i++) { // Начинаем с A2 (первая строка в данных - A2)
+  for (let i = 1; i < rows.length; i++) {
     const clientNumber = rows[i][0]; // Номер в столбце A
     const callTime = rows[i][6]; // Время в столбце G
     
@@ -57,8 +57,6 @@ async function findNextAvailableClient() {
 // Функция для записи времени начала обслуживания
 async function callClient(rowIndex) {
   const currentTime = new Date().toISOString();
-  
-  // Записываем время начала обслуживания в G
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `G${rowIndex}`,
@@ -72,8 +70,6 @@ async function callClient(rowIndex) {
 // Функция для записи времени завершения обслуживания
 async function endService(rowIndex) {
   const currentTime = new Date().toISOString();
-  
-  // Записываем время завершения обслуживания в H
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `H${rowIndex}`,
@@ -88,8 +84,8 @@ async function endService(rowIndex) {
 app.post('/call-client', async (req, res) => {
   try {
     const { clientNumber, rowIndex } = await findNextAvailableClient();
-    await callClient(rowIndex); // Записываем время начала обслуживания
-    io.emit('clientCalled', { clientNumber, rowIndex });
+    req.session.currentClient = { clientNumber, rowIndex }; // Сохраняем текущего клиента
+    io.emit('clientCalled', { clientNumber });
     res.status(200).send({ message: 'Client called successfully', clientNumber });
   } catch (error) {
     console.error('Error calling client:', error);
@@ -100,12 +96,9 @@ app.post('/call-client', async (req, res) => {
 // Обработчик для завершения обслуживания
 app.post('/end-service', async (req, res) => {
   try {
-    const { rowIndex } = req.body; // Получаем индекс строки из запроса
-    if (!rowIndex) {
-      throw new Error('Row index is required to end service.');
-    }
+    const { rowIndex } = req.session.currentClient;
     await endService(rowIndex); // Записываем время завершения обслуживания
-    io.emit('serviceEnded', { rowIndex });
+    req.session.currentClient = null; // Сбрасываем текущего клиента
     res.status(200).send('Service ended successfully.');
   } catch (error) {
     console.error('Error ending service:', error);
@@ -116,15 +109,6 @@ app.post('/end-service', async (req, res) => {
 // WebSocket
 io.on('connection', async (socket) => {
   console.log('Новое соединение установлено');
-
-  // Отправляем текущий номер клиенту сразу после подключения
-  try {
-    const { clientNumber } = await findNextAvailableClient();
-    socket.emit('updateClientNumber', { clientNumber });
-  } catch (error) {
-    console.error('Error sending client number:', error);
-  }
-
   socket.on('disconnect', () => {
     console.log('Пользователь отключился');
   });
