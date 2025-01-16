@@ -43,7 +43,7 @@ async function findNextAvailableClient() {
   });
   const rows = response.data.values || [];
   
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) { // Начинаем с индекса 0 (ячейка A2)
     const clientNumber = rows[i][0]; // Номер в столбце A
     const callTime = rows[i][6]; // Время в столбце G
     
@@ -53,6 +53,7 @@ async function findNextAvailableClient() {
   }
   throw new Error('No available clients found.');
 }
+
 
 // Функция для записи текущего клиента в ячейку F2
 async function saveCurrentClientToF2(clientNumber) {
